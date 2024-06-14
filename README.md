@@ -1,6 +1,6 @@
 # OpenVLA - Vision-Language-Action Models for Robotics
 
-[![arXiv](https://img.shields.io/badge/arXiv-2406.07210-df2a2a.svg?style=for-the-badge)](https://openvla.github.io/openvla.pdf)
+[![arXiv](https://img.shields.io/badge/arXiv-2406.09246-df2a2a.svg?style=for-the-badge)](https://arxiv.org/abs/2406.09246)
 [![HF Models](https://img.shields.io/badge/%F0%9F%A4%97-Models-yellow?style=for-the-badge)](https://huggingface.co/openvla/openvla-7b)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.2.0-EE4C2C.svg?style=for-the-badge&logo=pytorch)](https://pytorch.org/get-started/locally/)
 [![Python](https://img.shields.io/badge/python-3.10-blue?style=for-the-badge)](https://www.python.org)
@@ -195,7 +195,7 @@ If you find our code or models useful in your work, please cite [our paper](http
 @article{kim24openvla,
     title={OpenVLA: An Open-Source Vision-Language-Action Model},
     author={{Moo Jin} Kim and Karl Pertsch and Siddharth Karamcheti and Ted Xiao and Ashwin Balakrishna and Suraj Nair and Rafael Rafailov and Ethan Foster and Grace Lam and Pannag Sanketi and Quan Vuong and Thomas Kollar and Benjamin Burchfiel and Russ Tedrake and Dorsa Sadigh and Sergey Levine and Percy Liang and Chelsea Finn},
-    journal = {arXiv preprint},
+    journal = {arXiv preprint arXiv:2406.09246},
     year={2024}
 } 
 ```
