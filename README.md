@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/github/license/TRI-ML/prismatic-vlms?style=for-the-badge)](LICENSE)
  
 [**Getting Started**](#getting-started) | [**Pretrained VLAs**](#pretrained-vlas) | [**Installation**](#installation) | 
-[**Training VLAs from Scratch**](#training-vlas-from-scratch) | [**Project Page**](https://openvla.github.io/)
+[**Training VLAs from Scratch**](#training-vlas-from-scratch) | [**Project Website**](https://openvla.github.io/)
 
 A simple and scalable codebase for training and fine-tuning vision-language-action models (VLAs) for generalist robotic 
 manipulation:
