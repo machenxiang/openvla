@@ -13,7 +13,7 @@ A simple and scalable codebase for training and fine-tuning vision-language-acti
 manipulation:
 
 - **Different Dataset Mixtures**: We natively support arbitrary datasets in RLDS format, including arbitrary mixtures of
-  data from Open X-Embodiment.
+  data from the [Open X-Embodiment Dataset](https://robotics-transformer-x.github.io/).
 - **Easy Scaling**: Powered by PyTorch FSDP and Flash-Attention, we can quickly and efficiently train models from 1B - 
   34B parameters, with easily adaptable model architectures.
 - **Native Fine-Tuning Support**: Built-in support (with examples) for various forms of fine-tuning (full, 
@@ -27,7 +27,7 @@ To get started with loading and running OpenVLA models for inference, we provide
 HuggingFace `transformers` AutoClasses, with minimal dependencies.
 
 For example, to load `openvla-7b` for zero-shot instruction following in the
-[Bridge V2 environments](https://rail-berkeley.github.io/bridgedata/) with a Widow-X robot:
+[BridgeData V2 environments](https://rail-berkeley.github.io/bridgedata/) with a Widow-X robot:
 
 ```python
 # Install minimal dependencies (`torch`, `transformers`, `timm`, `tokenizers`, ...)
@@ -51,7 +51,7 @@ vla = AutoModelForVision2Seq.from_pretrained(
 image: Image.Image = get_from_camera(...)
 prompt = "In: What action should the robot take to {<INSTRUCTION>}?\nOut:"
 
-# Predict Action (7-DoF; un-normalize for BridgeV2)
+# Predict Action (7-DoF; un-normalize for BridgeData V2)
 inputs = processor(prompt, image).to("cuda:0", dtype=torch.bfloat16)
 action = vla.predict_action(**inputs, unnorm_key="bridge_orig", do_sample=False)
 
@@ -74,11 +74,11 @@ HuggingFace page](https://huggingface.co/openvla):
 - [`openvla-7b`](https://huggingface.co/openvla/openvla-7b): The flagship model from our paper, trained from 
   the Prismatic `prism-dinosiglip-224px` VLM (based on a fused DINOv2 and SigLIP vision backbone, and Llama-2 LLM). 
   Trained on a large mixture of datasets from Open X-Embodiment spanning 970K trajectories 
-  ([mixture details; see "Open-X Magic Soup++"](./prismatic/vla/datasets/rlds/oxe/mixtures.py)).
+  ([mixture details - see "Open-X Magic Soup++"](./prismatic/vla/datasets/rlds/oxe/mixtures.py)).
 - [`openvla-v01-7b`](https://huggingface.co/openvla/openvla-7b-v01): An early model used during development, trained from
   the Prismatic `siglip-224px` VLM (singular SigLIP vision backbone, and a Vicuña v1.5 LLM). Trained on the same mixture
   of datasets as [Octo](https://github.com/octo-models/octo), but for significantly fewer GPU hours than our final model 
-  ([mixture details; see "Open-X Magic Soup"](./prismatic/vla/datasets/rlds/oxe/mixtures.py)).
+  ([mixture details - see "Open-X Magic Soup"](./prismatic/vla/datasets/rlds/oxe/mixtures.py)).
 
 **Explicit Notes on Model Licensing & Commercial Use**: While all code in this repository is released under an MIT 
 License, our pretrained models may inherit restrictions from the underlying base models we use. Specifically, both the
@@ -133,7 +133,7 @@ We download and preprocess individual datasets from Open X-Embodiment in [RLDS f
 [this custom script](https://github.com/kpertsch/rlds_dataset_mod/blob/main/prepare_open_x.sh). See 
 [mixtures.py](./prismatic/vla/datasets/rlds/oxe/mixtures.py) for the full list of component datasets (and mixture 
 weights) we use to train `openvla-7b`. 
-- **Important**: For the Bridge V2 component dataset, the version in OXE is out of date (as of 12/20/2023). Instead,
+- **Important**: For the BridgeData V2 component, the version in OXE is out of date (as of 12/20/2023). Instead,
   you should download the dataset from the [official website](https://rail.eecs.berkeley.edu/datasets/bridge_release/data/tfds/bridge_dataset/) and place it under the subdirectory `bridge_orig/`. 
   Replace any reference to `bridge` in the OXE code with `bridge_orig`.
 
@@ -147,7 +147,7 @@ add your own training configuration and refer to it using the `--vla.type` comma
 We use PyTorch Fully Sharded Data Parallel (FSDP) to distribute training across GPUs. Launch training via `torchrun`:
 
 ```bash
-# Train VLA on Bridge V2 with the Prismatic DINO-SigLIP 224px Backbone on a Single Node (w/ 8 GPUs)
+# Train VLA on BridgeData V2 with the Prismatic DINO-SigLIP 224px Backbone on a Single Node (w/ 8 GPUs)
 torchrun --standalone --nnodes 1 --nproc-per-node 8 vla-scripts/train.py \
   --vla.type "prism-dinosiglip-224px+mx-bridge" \
   --data_root_dir <PATH TO OXE DATA ROOT> \
