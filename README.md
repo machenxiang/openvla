@@ -147,9 +147,9 @@ add your own training configuration and refer to it using the `--vla.type` comma
 We use PyTorch Fully Sharded Data Parallel (FSDP) to distribute training across GPUs. Launch training via `torchrun`:
 
 ```bash
-# Train VLA on Bridge V2 with the Prismatic SigLIP 224px Backbone on a Single Node (w/ 8 GPUs)
+# Train VLA on Bridge V2 with the Prismatic DINO-SigLIP 224px Backbone on a Single Node (w/ 8 GPUs)
 torchrun --standalone --nnodes 1 --nproc-per-node 8 vla-scripts/train.py \
-  --vla.type "siglip-224px+mx-bridge" \
+  --vla.type "prism-dinosiglip-224px+mx-bridge" \
   --data_root_dir <PATH TO OXE DATA ROOT> \
   --run_root_dir <PATH TO LOG/CHECKPOINT ROOT> \
   --wandb_project "<PROJECT>" \
