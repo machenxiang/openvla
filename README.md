@@ -74,11 +74,11 @@ HuggingFace page](https://huggingface.co/openvla):
 - [`openvla-7b`](https://huggingface.co/openvla/openvla-7b): The flagship model from our paper, trained from 
   the Prismatic `prism-dinosiglip-224px` VLM (based on a fused DINOv2 and SigLIP vision backbone, and Llama-2 LLM). 
   Trained on a large mixture of datasets from Open X-Embodiment spanning 970K trajectories 
-  ([mixture details](./prismatic/vla/datasets/rlds/oxe/mixtures.py)).
+  ([mixture details; see "Open-X Magic Soup++"](./prismatic/vla/datasets/rlds/oxe/mixtures.py)).
 - [`openvla-v01-7b`](https://huggingface.co/openvla/openvla-7b-v01): An early model used during development, trained from
   the Prismatic `siglip-224px` VLM (singular SigLIP vision backbone, and a Vicuña v1.5 LLM). Trained on the same mixture
   of datasets as [Octo](https://github.com/octo-models/octo), but for significantly fewer GPU hours than our final model 
-  ([mixture details](./prismatic/vla/datasets/rlds/oxe/mixtures.py)).
+  ([mixture details; see "Open-X Magic Soup"](./prismatic/vla/datasets/rlds/oxe/mixtures.py)).
 
 **Explicit Notes on Model Licensing & Commercial Use**: While all code in this repository is released under an MIT 
 License, our pretrained models may inherit restrictions from the underlying base models we use. Specifically, both the
