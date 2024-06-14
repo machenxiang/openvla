@@ -189,7 +189,7 @@ High-level overview of repository/project file-tree:
 
 #### Citation
 
-If you find our code or models useful in your work, please cite [our paper](https://openvla.github.io/openvla.pdf):
+If you find our code or models useful in your work, please cite [our paper](https://arxiv.org/abs/2406.09246):
 
 ```bibtex
 @article{kim24openvla,
