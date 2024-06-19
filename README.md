@@ -130,7 +130,7 @@ the following, see [VLA Troubleshooting](#vla-troubleshooting) below (or file a 
 ### VLA Pretraining Datasets
 
 We download and preprocess individual datasets from Open X-Embodiment in [RLDS format](https://github.com/google-research/rlds) following 
-[this custom script](https://github.com/kpertsch/rlds_dataset_mod/blob/main/prepare_open_x.sh). See 
+[this custom script](https://github.com/moojink/rlds_dataset_mod/blob/main/prepare_open_x.sh). See 
 [mixtures.py](./prismatic/vla/datasets/rlds/oxe/mixtures.py) for the full list of component datasets (and mixture 
 weights) we use to train `openvla-7b`. 
 - **Important**: For the BridgeData V2 component, the version in OXE is out of date (as of 12/20/2023). Instead,
