@@ -27,7 +27,6 @@ import draccus
 import torch
 import torch.distributed as dist
 import tqdm
-import wandb
 from accelerate import PartialState
 from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -36,6 +35,7 @@ from torch.utils.data import DataLoader
 from transformers import AutoModelForVision2Seq, AutoProcessor, BitsAndBytesConfig
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
+import wandb
 from prismatic.models.backbones.llm.prompting import PurePromptBuilder, VicunaV15ChatPromptBuilder
 from prismatic.util.data_utils import PaddedCollatorForActionPrediction
 from prismatic.vla.action_tokenizer import ActionTokenizer
@@ -279,14 +279,15 @@ def finetune(cfg: FinetuneConfig) -> None:
                     processor.save_pretrained(run_dir)
                     vla.module.save_pretrained(save_dir)
 
-                    # Merge LoRA weights into model backbone for faster inference
-                    #   =>> TODO (kpertsch, siddk) :: This is inefficient; probably want to do this post-hoc...
-                    if cfg.use_lora:
-                        base_vla = AutoModelForVision2Seq.from_pretrained(
-                            cfg.vla_path, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True, trust_remote_code=True
-                        )
-                        merged_vla = PeftModel.from_pretrained(base_vla, adapter_dir)
-                        merged_vla = merged_vla.merge_and_unload()
+                # Merge LoRA weights into model backbone for faster inference
+                #   =>> Note that merging is slow and can be done post-hoc to speed up training
+                if cfg.use_lora:
+                    base_vla = AutoModelForVision2Seq.from_pretrained(
+                        cfg.vla_path, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True, trust_remote_code=True
+                    )
+                    merged_vla = PeftModel.from_pretrained(base_vla, adapter_dir)
+                    merged_vla = merged_vla.merge_and_unload()
+                    if distributed_state.is_main_process:
                         merged_vla.save_pretrained(run_dir)
 
                 # Block on Main Process Checkpointing
