@@ -279,6 +279,9 @@ def finetune(cfg: FinetuneConfig) -> None:
                     processor.save_pretrained(run_dir)
                     vla.module.save_pretrained(save_dir)
 
+                # Wait for processor and adapter weights to be saved by main process
+                dist.barrier()
+
                 # Merge LoRA weights into model backbone for faster inference
                 #   =>> Note that merging is slow and can be done post-hoc to speed up training
                 if cfg.use_lora:
