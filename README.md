@@ -206,8 +206,8 @@ if you have sufficient compute (e.g., a full node of 8 A100 GPUs) and if LoRA fi
 varies drastically from the pretraining distribution). Otherwise, we recommend that you try parameter-efficient fine-tuning via LoRA, which is described in the 
 [Fine-Tuning OpenVLA via LoRA](#fine-tuning-openvla-via-lora) section.
 
-For full fine-tuning, you will need to download a different version of the OpenVLA model that is compatible with the Prismatic VLMs codebase, which we built
-on top of to develop the OpenVLA model. You can download this checkpoint using the commands below:
+For full fine-tuning, you will need to download [a different version of the OpenVLA model checkpoint](https://huggingface.co/openvla/openvla-7b-prismatic) that is compatible
+with the Prismatic VLMs codebase, which we built on top of to develop the OpenVLA model. You can download this Prismatic-compatible OpenVLA checkpoint using the commands below:
 
 ```bash
 # Change directory to your base model checkpoints folder
