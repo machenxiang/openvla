@@ -207,7 +207,8 @@ varies drastically from the pretraining distribution). Otherwise, we recommend t
 [Fine-Tuning OpenVLA via LoRA](#fine-tuning-openvla-via-lora) section.
 
 For full fine-tuning, you will need to download [a different version of the OpenVLA model checkpoint](https://huggingface.co/openvla/openvla-7b-prismatic) that is compatible
-with the Prismatic VLMs codebase, which we built on top of to develop the OpenVLA model. You can download this Prismatic-compatible OpenVLA checkpoint using the commands below:
+with the Prismatic VLMs codebase, which we built on top of to develop the OpenVLA model. You can download this Prismatic-compatible OpenVLA checkpoint using the git commands below
+(alternatively, you can download via the [Hugging Face CLI](https://huggingface.co/docs/huggingface_hub/main/en/guides/cli)):
 
 ```bash
 # Change directory to your base model checkpoints folder
