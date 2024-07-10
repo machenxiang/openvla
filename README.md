@@ -295,8 +295,73 @@ to the `OXE_DATASET_CONFIGS` dictionary.
 
 After completing the steps above, you can start full fine-tuning using the `vla-scripts/train.py` script. Make sure to set the `--vla.type` argument to the new `vla_id` that you added in `prismatic/conf/vla.py`.
 
+When you are finished with fine-tuning, you will need to convert the final model checkpoint to a version that is
+compatible with the Hugging Face `transformers` library. See the [Converting Prismatic Models to Hugging Face](#converting-prismatic-models-to-hugging-face) section for instructions.
+
 If you run into any issues, please visit the [VLA Troubleshooting](#vla-troubleshooting) section or search for a similar issue in the
 [OpenVLA GitHub Issues page](https://github.com/openvla/openvla/issues?q=) (including "Closed" issues). If you cannot find a similar issue there, feel free to create a new issue.
+
+### Converting Prismatic Models to Hugging Face
+
+If you have used the Prismatic VLMs codebase to train your model (e.g., if you did full fine-tuning of OpenVLA on a
+new dataset), you will need to convert the final checkpoint to a version that is compatible with Hugging Face
+`transformers` AutoClasses. We discuss how to do so in this section.
+
+Let's say your training run directory is `PRISMATIC_RUN_DIR` (e.g., `prism-dinosiglip-224px+mx-oxe-magic-soup-plus+n8+b32+x7`).
+Inside this directory, there should be a directory called `checkpoints` which contains saved model checkpoints (e.g.,
+`step-295000-epoch-40-loss=0.2200.pt`). The Prismatic-to-Hugging-Face conversion script
+([convert_openvla_weights_to_hf.py](vla-scripts/extern/convert_openvla_weights_to_hf.py)) expects a checkpoint file
+named `latest-checkpoint.pt`. Therefore, you should first create a symbolic link called `latest-checkpoint.pt` that
+points to the checkpoint file that you wish to convert:
+
+```bash
+# Go to your Prismatic training run's `checkpoints` directory
+cd PRISMATIC_RUN_DIR/checkpoints
+
+# Create symbolic link pointing to your checkpoint file
+ln -s <YOUR CHECKPOINT FILENAME> latest-checkpoint.pt
+```
+
+Then, launch the conversion script to convert the checkpoint from the Prismatic VLMs format to the Hugging Face format:
+
+```bash
+python vla-scripts/extern/convert_openvla_weights_to_hf.py \
+    --openvla_model_path_or_id <PRISMATIC_RUN_DIR> \
+    --output_hf_model_local_path <OUTPUT DIR FOR CONVERTED CHECKPOINT>
+```
+
+The command above will save the HF-compatible checkpoint in `output_hf_model_local_path`. Now you can load the checkpoint
+with HF AutoClasses as normal, as shown below. Note that there is an additional necessary step to register the OpenVLA model
+to HF AutoClasses before loading it because you are loading a locally saved checkpoint rather than one that is pushed to the
+HF Hub (see [here](https://huggingface.co/docs/transformers/en/custom_models#registering-a-model-with-custom-code-to-the-auto-classes)
+for details).
+
+```python
+import torch
+from transformers import AutoConfig, AutoImageProcessor, AutoModelForVision2Seq, AutoProcessor
+
+from prismatic.extern.hf.configuration_prismatic import OpenVLAConfig
+from prismatic.extern.hf.modeling_prismatic import OpenVLAForActionPrediction
+from prismatic.extern.hf.processing_prismatic import PrismaticImageProcessor, PrismaticProcessor
+
+# Register OpenVLA model to HF AutoClasses (not needed if you pushed model to HF Hub)
+AutoConfig.register("openvla", OpenVLAConfig)
+AutoImageProcessor.register(OpenVLAConfig, PrismaticImageProcessor)
+AutoProcessor.register(OpenVLAConfig, PrismaticProcessor)
+AutoModelForVision2Seq.register(OpenVLAConfig, OpenVLAForActionPrediction)
+
+# Load Processor & VLA
+processor = AutoProcessor.from_pretrained("<PATH TO CONVERTED CHECKPOINT DIR>", trust_remote_code=True)
+vla = AutoModelForVision2Seq.from_pretrained(
+    "<PATH TO CONVERTED CHECKPOINT DIR>",
+    attn_implementation="flash_attention_2",  # [Optional] Requires `flash_attn`
+    torch_dtype=torch.bfloat16,
+    low_cpu_mem_usage=True,
+    trust_remote_code=True,
+).to("cuda:0")
+
+...
+```
 
 ## Training VLAs from Scratch
 
