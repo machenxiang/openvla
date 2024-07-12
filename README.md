@@ -194,6 +194,9 @@ compatible with our fine-tuning script (see [this repo](https://github.com/kpert
 custom PyTorch Dataset wrapper (see comments in `vla-scripts/finetune.py` for instructions). We recommend option (a) for most users; the RLDS dataset and
 dataloader are tested more extensively since we used these for all of our pretraining and fine-tuning experiments.
 
+For option (a), after you converted your dataset to RLDS, you need to register it with our data loader, by registering a dataset
+config [here](prismatic/vla/datasets/rlds/oxe/configs.py#L54) and a dataset transform function [here](prismatic/vla/datasets/rlds/oxe/transforms.py#L828).
+
 Once you have integrated your new dataset, you can launch LoRA fine-tuning with the same `vla-scripts/finetune.py` script above. If you run into any issues,
 please visit the [VLA Troubleshooting](#vla-troubleshooting) section or search for a similar issue in the [OpenVLA GitHub Issues page](https://github.com/openvla/openvla/issues?q=)
 (including "Closed" issues). If you cannot find a similar issue there, feel free to create a new issue.
