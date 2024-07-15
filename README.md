@@ -415,7 +415,7 @@ FileNotFoundError: Failed to construct dataset "fractal20220817_data", builder_k
 AttributeError: 'DLataset' object has no attribute 'traj_map'. Did you mean: 'flat_map'?
 ```
 - **Fix**: Upgrade `dlimp` to the newest version. You may have to `--force-reinstall` like so:
-`pip install --no-deps --force-reinstall git+https://github.com/kvablack/dlimp@5edaa4691567873d495633f2708982b42edf1972`
+`pip install --no-deps --force-reinstall git+https://github.com/moojink/dlimp_openvla`
 
 ---
 
