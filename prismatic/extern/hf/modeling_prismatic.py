@@ -508,11 +508,12 @@ class OpenVLAForActionPrediction(PrismaticForConditionalGeneration):
     ) -> np.ndarray:
         """Thin wrapper around super().generate() that decodes predicted actions and de-normalizes them."""
 
-        # We need to add this special empty token ('') after the colon (':') token in "ASSISTANT:"
-        # in order for the predictions to match the training configuration and be accurate.
-        input_ids = torch.cat(
-            (input_ids, torch.unsqueeze(torch.Tensor([29871]).long(), dim=0).to(input_ids.device)), dim=1
-        )
+        # If the special empty token ('') does not already appear after the colon (':') token in the prompt
+        # (after "OUT:" or "ASSISTANT:"), insert it to match the inputs seen at training time
+        if not torch.all(input_ids[:, -1] == 29871):
+            input_ids = torch.cat(
+                (input_ids, torch.unsqueeze(torch.Tensor([29871]).long(), dim=0).to(input_ids.device)), dim=1
+            )
 
         # Run VLA inference
         generated_ids = self.generate(input_ids, max_new_tokens=self.get_action_dim(unnorm_key), **kwargs)
