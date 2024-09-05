@@ -517,6 +517,14 @@ cd openvla
 pip install -r experiments/robot/libero/libero_requirements.txt
 ```
 
+(Optional) To download the modified versions of the LIBERO datasets that we used in our fine-tuning
+experiments, run the command below. This will download the LIBERO-Spatial, LIBERO-Object, LIBERO-Goal,
+and LIBERO-10 datasets in RLDS data format (~10 GB total). You can use these to fine-tune OpenVLA or
+train other methods. This step is optional since we provide pretrained OpenVLA checkpoints below.
+```bash
+git clone git@hf.co:datasets/openvla/modified_libero_rlds
+```
+
 #### Launching LIBERO Evaluations
 
 We fine-tuned OpenVLA via LoRA (r=32) on four LIBERO task suites independently: LIBERO-Spatial, LIBERO-Object, LIBERO-Goal, and LIBERO-10 (also called LIBERO-Long).
