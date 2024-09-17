@@ -521,6 +521,9 @@ pip install -r experiments/robot/libero/libero_requirements.txt
 experiments, run the command below. This will download the LIBERO-Spatial, LIBERO-Object, LIBERO-Goal,
 and LIBERO-10 datasets in RLDS data format (~10 GB total). You can use these to fine-tune OpenVLA or
 train other methods. This step is optional since we provide pretrained OpenVLA checkpoints below.
+(Also, you can find the script we used to generate the modified datasets in raw HDF5 format
+[here](experiments/robot/libero/regenerate_libero_dataset.py) and the code we used to convert these
+datasets to the RLDS format [here](https://github.com/moojink/rlds_dataset_builder).)
 ```bash
 git clone git@hf.co:datasets/openvla/modified_libero_rlds
 ```
