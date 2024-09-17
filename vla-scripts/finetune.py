@@ -363,6 +363,11 @@ def finetune(cfg: FinetuneConfig) -> None:
                 # Block on Main Process Checkpointing
                 dist.barrier()
 
+            # Stop training when max_steps is reached
+            if gradient_step_idx == cfg.max_steps:
+                print(f"Max step {cfg.max_steps} reached! Stopping training...")
+                break
+
 
 if __name__ == "__main__":
     finetune()
