@@ -39,6 +39,8 @@ from transformers import AutoConfig, AutoImageProcessor
 from transformers.modeling_outputs import CausalLMOutputWithPast
 
 import wandb
+import numpy as np
+from torch.utils.tensorboard import SummaryWriter
 from prismatic.models.backbones.llm.prompting import PurePromptBuilder, VicunaV15ChatPromptBuilder
 from prismatic.util.data_utils import PaddedCollatorForActionPrediction
 from prismatic.vla.action_tokenizer import ActionTokenizer
@@ -105,6 +107,7 @@ class FinetuneConfig:
     # Tracking Parameters
     wandb_project: str = "openvla"                                  # Name of W&B project to log to (use default!)
     wandb_entity: str = "stanford-voltron"                          # Name of entity to log under
+    use_wandb: bool = False                                        # Whether to use W&B for logging
     run_id_note: Optional[str] = None                               # Extra note for logging, Weights & Biases
 
     # fmt: on
@@ -182,7 +185,10 @@ def finetune(cfg: FinetuneConfig) -> None:
         vla.print_trainable_parameters()
 
     # Wrap VLA in PyTorch DDP Wrapper for Multi-GPU Training
-    vla = DDP(vla, device_ids=[device_id], find_unused_parameters=True, gradient_as_bucket_view=True)
+    if "RANK" in os.environ and "LOCAL_RANK" in os.environ and "WORLD_SIZE" in os.environ:
+        vla = DDP(vla, device_ids=[device_id], find_unused_parameters=True, gradient_as_bucket_view=True)
+    else:
+        print("Single GPU mode - skipping DDP wrapper")
 
     # Create Optimizer =>> note that we default to a simple constant learning rate!
     trainable_params = [param for param in vla.parameters() if param.requires_grad]
@@ -212,11 +218,14 @@ def finetune(cfg: FinetuneConfig) -> None:
         image_transform=processor.image_processor.apply_transform,
         prompt_builder_fn=PurePromptBuilder if "v01" not in cfg.vla_path else VicunaV15ChatPromptBuilder,
     )
+    # Get the base model for config access (handles both DDP and non-DDP cases)
+    model_for_config = vla.module if hasattr(vla, 'module') else vla.base_model
+
     vla_dataset = RLDSDataset(
         cfg.data_root_dir,
         cfg.dataset_name,
         batch_transform,
-        resize_resolution=tuple(vla.module.config.image_sizes),
+        resize_resolution=tuple(model_for_config.config.image_sizes),
         shuffle_buffer_size=cfg.shuffle_buffer_size,
         image_aug=cfg.image_aug,
     )
@@ -238,8 +247,12 @@ def finetune(cfg: FinetuneConfig) -> None:
     )
 
     # Initialize Logging =>> W&B
-    if distributed_state.is_main_process:
+    if distributed_state.is_main_process and cfg.use_wandb:
         wandb.init(entity=cfg.wandb_entity, project=cfg.wandb_project, name=f"ft+{exp_id}")
+
+    # Initialize Logging =>> TensorBoard
+    if distributed_state.is_main_process:
+        tb_writer = SummaryWriter(log_dir=run_dir / "tensorboard")
 
     # Deque to store recent train metrics (used for computing smoothened metrics for gradient accumulation)
     recent_losses = deque(maxlen=cfg.grad_accumulation_steps)
@@ -267,7 +280,8 @@ def finetune(cfg: FinetuneConfig) -> None:
             normalized_loss.backward()
 
             # Compute Accuracy and L1 Loss for Logging
-            action_logits = output.logits[:, vla.module.vision_backbone.featurizer.patch_embed.num_patches : -1]
+            vision_model = vla.module if hasattr(vla, 'module') else vla.base_model
+            action_logits = output.logits[:, vision_model.vision_backbone.featurizer.patch_embed.num_patches : -1]
             action_preds = action_logits.argmax(dim=2)
             action_gt = batch["labels"][:, 1:].to(action_preds.device)
             mask = action_gt > action_tokenizer.action_token_begin_idx
@@ -302,14 +316,19 @@ def finetune(cfg: FinetuneConfig) -> None:
 
             # Push Metrics to W&B (every 10 gradient steps)
             if distributed_state.is_main_process and gradient_step_idx % 10 == 0:
-                wandb.log(
-                    {
-                        "train_loss": smoothened_loss,
-                        "action_accuracy": smoothened_action_accuracy,
-                        "l1_loss": smoothened_l1_loss,
-                    },
-                    step=gradient_step_idx,
-                )
+                if cfg.use_wandb:
+                    wandb.log(
+                        {
+                            "train_loss": smoothened_loss,
+                            "action_accuracy": smoothened_action_accuracy,
+                            "l1_loss": smoothened_l1_loss,
+                        },
+                        step=gradient_step_idx,
+                    )
+                # Push Metrics to TensorBoard (every 10 gradient steps)
+                tb_writer.add_scalar("train/train_loss", smoothened_loss, gradient_step_idx)
+                tb_writer.add_scalar("train/action_accuracy", smoothened_action_accuracy, gradient_step_idx)
+                tb_writer.add_scalar("train/l1_loss", smoothened_l1_loss, gradient_step_idx)
 
             # Optimizer Step
             if (batch_idx + 1) % cfg.grad_accumulation_steps == 0:
@@ -327,7 +346,8 @@ def finetune(cfg: FinetuneConfig) -> None:
 
                     # Save Processor & Weights
                     processor.save_pretrained(run_dir)
-                    vla.module.save_pretrained(save_dir)
+                    save_model = vla.module if hasattr(vla, 'module') else vla.base_model
+                    save_model.save_pretrained(save_dir)
 
                 # Wait for processor and adapter weights to be saved by main process
                 dist.barrier()
