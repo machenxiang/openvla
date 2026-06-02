@@ -11,7 +11,11 @@ import sys
 # Set environment variables BEFORE importing anything else
 os.environ["HF_TOKEN"] = ""  # Set your HF_TOKEN here
 os.environ["PYTHONPATH"] = "/home/vcar/LIBERO:" + os.environ.get("PYTHONPATH", "")
-os.environ["MUJOCO_GL"] = "osmesa"
+# os.environ["MUJOCO_GL"] = "osmesa"
+
+# 在你的 Python 脚本开头修改这两行
+os.environ["MUJOCO_GL"] = "egl"
+os.environ["PYOPENGL_PLATFORM"] = "egl"
 
 # Print debug info
 print("Debug mode: Starting evaluation...")
@@ -26,7 +30,7 @@ if __name__ == "__main__":
             sys.executable,
             "experiments/robot/libero/run_libero_eval.py",
             "--model_family=openvla",
-            "--pretrained_checkpoint=openvla/openvla-7b-finetuned-libero-spatial",
+            "--pretrained_checkpoint=/home/vcar/openvla/runs/openvla-7b+libero_spatial_no_noops+b4+lr-5e-05+lora-r32+dropout-0.0--image_aug",
             "--task_suite_name=libero_spatial",
             "--center_crop=True",
             "--num_trials_per_task=10",  # 减少试验次数加快调试

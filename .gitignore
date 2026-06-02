@@ -152,3 +152,4 @@ data/
 rollouts/
 wandb/
 runs/
+adapter-tmp/

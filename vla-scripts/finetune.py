@@ -28,11 +28,13 @@ from typing import Optional
 import draccus
 import torch
 import torch.distributed as dist
+from torch.optim import AdamW
 import tqdm
 from accelerate import PartialState
 from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
 from torch.nn.parallel import DistributedDataParallel as DDP
-from torch.optim import AdamW
+from transformers import get_cosine_schedule_with_warmup
+from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from transformers import AutoModelForVision2Seq, AutoProcessor, BitsAndBytesConfig
 from transformers import AutoConfig, AutoImageProcessor
@@ -194,6 +196,14 @@ def finetune(cfg: FinetuneConfig) -> None:
     trainable_params = [param for param in vla.parameters() if param.requires_grad]
     optimizer = AdamW(trainable_params, lr=cfg.learning_rate)
 
+    # Create Cosine Annealing Learning Rate Scheduler with Warmup
+    num_warmup_steps = int(cfg.max_steps * 0.03)  # 3% of max_steps for warmup
+    scheduler = get_cosine_schedule_with_warmup(
+        optimizer,
+        num_warmup_steps=num_warmup_steps,
+        num_training_steps=cfg.max_steps,
+    )
+
     # Create Action Tokenizer
     action_tokenizer = ActionTokenizer(processor.tokenizer)
 
@@ -329,10 +339,12 @@ def finetune(cfg: FinetuneConfig) -> None:
                 tb_writer.add_scalar("train/train_loss", smoothened_loss, gradient_step_idx)
                 tb_writer.add_scalar("train/action_accuracy", smoothened_action_accuracy, gradient_step_idx)
                 tb_writer.add_scalar("train/l1_loss", smoothened_l1_loss, gradient_step_idx)
+                tb_writer.add_scalar("train/learning_rate", scheduler.get_last_lr()[0], gradient_step_idx)
 
             # Optimizer Step
             if (batch_idx + 1) % cfg.grad_accumulation_steps == 0:
                 optimizer.step()
+                scheduler.step()
                 optimizer.zero_grad()
                 progress.update()
 
@@ -341,51 +353,37 @@ def finetune(cfg: FinetuneConfig) -> None:
                 if distributed_state.is_main_process:
                     print(f"Saving Model Checkpoint for Step {gradient_step_idx}")
 
-                    # If LoRA, we first save adapter weights, then merge into full model; otherwise, default save!
-                    save_dir = adapter_dir if cfg.use_lora else run_dir
-
                     # Save Processor & Weights
                     processor.save_pretrained(run_dir)
                     save_model = vla.module if hasattr(vla, 'module') else vla.base_model
-                    save_model.save_pretrained(save_dir)
+                    # For LoRA, save only the adapter weights
+                    if cfg.use_lora:
+                        vla.save_pretrained(adapter_dir)
+                    else:
+                        save_model.save_pretrained(run_dir)
+
+                    print(f"Saved LoRA adapter for Step {gradient_step_idx} at: {adapter_dir}")
 
                 # Wait for processor and adapter weights to be saved by main process
-                dist.barrier()
-
-                # Merge LoRA weights into model backbone for faster inference
-                #   =>> Note that merging is slow and can be done post-hoc to speed up training
-                if cfg.use_lora:
-                    base_vla = AutoModelForVision2Seq.from_pretrained(
-                        cfg.vla_path, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True, trust_remote_code=True
-                    )
-                    merged_vla = PeftModel.from_pretrained(base_vla, adapter_dir)
-                    merged_vla = merged_vla.merge_and_unload()
-                    if distributed_state.is_main_process:
-                        if cfg.save_latest_checkpoint_only:
-                            # Overwrite latest checkpoint
-                            merged_vla.save_pretrained(run_dir)
-
-                            print(f"Saved Model Checkpoint for Step {gradient_step_idx} at: {run_dir}")
-                        else:
-                            # Prepare to save checkpoint in new directory
-                            checkpoint_dir = Path(str(run_dir) + f"--{gradient_step_idx}_chkpt")
-                            os.makedirs(checkpoint_dir, exist_ok=True)
-
-                            # Save dataset statistics to new directory
-                            save_dataset_statistics(vla_dataset.dataset_statistics, checkpoint_dir)
-
-                            # Save processor and model weights to new directory
-                            processor.save_pretrained(checkpoint_dir)
-                            merged_vla.save_pretrained(checkpoint_dir)
-
-                            print(f"Saved Model Checkpoint for Step {gradient_step_idx} at: {checkpoint_dir}")
-
-                # Block on Main Process Checkpointing
-                dist.barrier()
+                # Only call barrier if we're actually in distributed mode
+                if "RANK" in os.environ and "LOCAL_RANK" in os.environ and "WORLD_SIZE" in os.environ:
+                    dist.barrier()
 
             # Stop training when max_steps is reached
             if gradient_step_idx == cfg.max_steps:
                 print(f"Max step {cfg.max_steps} reached! Stopping training...")
+
+                # Merge LoRA weights into full model and save final checkpoint
+                if cfg.use_lora:
+                    print("Merging LoRA weights into full model...")
+                    base_vla = AutoModelForVision2Seq.from_pretrained(
+                        cfg.vla_path, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True, trust_remote_code=True
+                    )
+                    merged_vla = PeftModel.from_pretrained(base_vla, str(adapter_dir))
+                    merged_vla = merged_vla.merge_and_unload()
+                    merged_vla.save_pretrained(run_dir)
+                    print(f"Saved merged model at: {run_dir}")
+
                 break
 
 
