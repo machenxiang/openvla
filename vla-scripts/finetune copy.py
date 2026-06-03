@@ -271,15 +271,30 @@ def finetune(cfg: FinetuneConfig) -> None:
     with tqdm.tqdm(total=cfg.max_steps, leave=False) as progress:
         vla.train()
         optimizer.zero_grad()
+        fixed_batch = None
         for batch_idx, batch in enumerate(dataloader):
+
+            if fixed_batch is None:
+                fixed_batch = {k: v.to(device_id) if hasattr(v, "to") else v for k, v in batch.items()}
+
+            # 将当前的 batch 强行替换为固定 batch
+            batch = fixed_batch
             with torch.autocast("cuda", dtype=torch.bfloat16):
                 output: CausalLMOutputWithPast = vla(
-                    input_ids=batch["input_ids"].to(device_id),
-                    attention_mask=batch["attention_mask"].to(device_id),
-                    pixel_values=batch["pixel_values"].to(torch.bfloat16).to(device_id),
-                    labels=batch["labels"].to(device_id),
+                    input_ids=batch["input_ids"],
+                    attention_mask=batch["attention_mask"],
+                    pixel_values=batch["pixel_values"].to(torch.bfloat16),
+                    labels=batch["labels"],
                 )
                 loss = output.loss
+            # with torch.autocast("cuda", dtype=torch.bfloat16):
+            #     output: CausalLMOutputWithPast = vla(
+            #         input_ids=batch["input_ids"].to(device_id),
+            #         attention_mask=batch["attention_mask"].to(device_id),
+            #         pixel_values=batch["pixel_values"].to(torch.bfloat16).to(device_id),
+            #         labels=batch["labels"],
+            #     )
+            #     loss = output.loss
 
             # Normalize loss to account for gradient accumulation
             normalized_loss = loss / cfg.grad_accumulation_steps
@@ -331,6 +346,10 @@ def finetune(cfg: FinetuneConfig) -> None:
                     tb_writer.add_scalar("train/action_accuracy", smoothened_action_accuracy, gradient_step_idx)
                     tb_writer.add_scalar("train/l1_loss", smoothened_l1_loss, gradient_step_idx)
                     tb_writer.add_scalar("train/learning_rate", scheduler.get_last_lr()[0], gradient_step_idx)
+
+                if gradient_step_idx >= 500:
+                    print(f"Reached Debug Step 500. Forcing max_steps to trigger clean merge and save...")
+                    cfg.max_steps = gradient_step_idx
 
                 optimizer.zero_grad()
                 progress.update()
