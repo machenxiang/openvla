@@ -27,12 +27,22 @@ def load_tfrecord_dataset(data_root: Path, dataset_name: str, num_samples: int =
 
     dataset = tf.data.TFRecordDataset(tfrecord_files)
 
-    # 解析 example
+    # 解析 example - 扁平化结构
     def parse_example(example):
         return tf.io.parse_single_example(
             example,
             {
-                "features/steps": tf.io.VarLenFeature(tf.string),
+                "steps/is_first": tf.io.VarLenFeature(tf.int64),
+                "steps/action": tf.io.VarLenFeature(tf.float32),
+                "steps/discount": tf.io.VarLenFeature(tf.float32),
+                "steps/is_last": tf.io.VarLenFeature(tf.int64),
+                "steps/language_instruction": tf.io.VarLenFeature(tf.string),
+                "steps/observation/wrist_image": tf.io.VarLenFeature(tf.string),
+                "steps/reward": tf.io.VarLenFeature(tf.float32),
+                "steps/is_terminal": tf.io.VarLenFeature(tf.int64),
+                "steps/observation/state": tf.io.VarLenFeature(tf.float32),
+                "steps/observation/joint_state": tf.io.VarLenFeature(tf.float32),
+                "steps/observation/image": tf.io.VarLenFeature(tf.string),
             }
         )
 
@@ -40,128 +50,92 @@ def load_tfrecord_dataset(data_root: Path, dataset_name: str, num_samples: int =
     return parsed_dataset
 
 
-def decode_steps(steps_bytes):
-    """解码 steps 序列"""
-    steps = []
-    for step_bytes in steps_bytes:
-        step = tf.io.parse_tensor(step_bytes, out_type=tf.float32)
-        steps.append(step)
-    return steps
-
-
 def visualize_sample(sample, sample_idx=0):
     """可视化单个样本"""
-    raw_steps = sample["features/steps"]
-
-    # 获取第一个 step 来查看结构
-    first_step = tf.io.parse_tensor(raw_steps[0], out_type=tf.float32)
     print(f"\n=== Sample {sample_idx} ===")
-    print(f"Number of steps: {len(raw_steps)}")
-    print(f"Step shape: {first_step.shape}")
-    print(f"Step dtype: {first_step.dtype}")
 
-    # 解析所有 steps
-    actions = []
-    images = []
-    wrist_images = []
-    instructions = []
-    states = []
+    # 获取基本数据
+    actions = tf.sparse.to_dense(sample["steps/action"]).numpy()
+    states = tf.sparse.to_dense(sample["steps/observation/state"]).numpy()
+    images = tf.sparse.to_dense(sample["steps/observation/image"]).numpy()
+    wrist_images = tf.sparse.to_dense(sample["steps/observation/wrist_image"]).numpy()
+    instructions = tf.sparse.to_dense(sample["steps/language_instruction"])
 
-    for i, step_bytes in enumerate(raw_steps):
-        step = tf.io.parse_tensor(step_bytes, out_type=tf.float32).numpy()
-        # step 格式: [action(7), image(256,256,3), wrist_image(256,256,3), state(8), joint_state(7), is_last, is_first, is_terminal, discount, reward, instruction_len, ...]
-        # 需要根据实际情况解析
+    num_elements = actions.shape[0]
+    action_dim = 7
+    state_dim = 8
 
-        # 假设 step 被扁平化了，需要根据 features.json 的结构来解析
-        # action: 7, image: 256*256*3, wrist: 256*256*3, state: 8, joint: 7
-        # 后面是标量: is_last, is_first, is_terminal, discount, reward, instruction_len
-        # 然后是 language_instruction
+    # 扁平化数据，需要重新计算步数
+    num_steps = num_elements // action_dim
+    actions = actions[:num_steps * action_dim].reshape(num_steps, action_dim)
+    states = states[:num_steps * state_dim].reshape(num_steps, state_dim)
 
-        offset = 0
-        action = step[offset:offset+7]; offset += 7
-        img_flat = step[offset:offset+256*256*3]; offset += 256*256*3
-        wrist_flat = step[offset:offset+256*256*3]; offset += 256*256*3
-        state = step[offset:offset+8]; offset += 8
-        joint = step[offset:offset+7]; offset += 7
+    # images 和 wrist_images 每个step一张，不需要reshape
+    num_images = images.shape[0]
+    wrist_images = wrist_images[:num_steps]  # 截取到num_steps
+    images = images[:num_steps]
 
-        is_last = step[offset]; offset += 1
-        is_first = step[offset]; offset += 1
-        is_terminal = step[offset]; offset += 1
-        discount = step[offset]; offset += 1
-        reward = step[offset]; offset += 1
+    print(f"Number of steps: {num_steps}")
+    print(f"Actions shape: {actions.shape}")
+    print(f"States shape: {states.shape}")
+    print(f"Number of images: {images.shape[0]}")
 
-        actions.append(action)
-        images.append(img_flat.reshape(256, 256, 3).astype(np.uint8))
-        wrist_images.append(wrist_flat.reshape(256, 256, 3).astype(np.uint8))
-        states.append(state)
+    # 解析 language instruction
+    lang_instr = instructions[0].numpy().decode('utf-8') if len(instructions) > 0 else ""
+    print(f"Language instruction: {lang_instr}")
 
-    return {
-        "actions": np.array(actions),
-        "images": images,
-        "wrist_images": wrist_images,
-        "states": np.array(states),
-    }
+    # 平均采样4个点
+    num_plot_points = 4
+    sample_indices = np.linspace(0, num_steps - 1, num_plot_points, dtype=int)
+    print(f"Sampled indices: {sample_indices}")
 
+    # 创建图像 + 动作图一起显示 (4行4列)
+    fig = plt.figure(figsize=(16, 12))
 
-def plot_sample(data, sample_idx=0, num_frames=5):
-    """绘制样本的关键帧"""
-    n_frames = min(num_frames, len(data["images"]))
-    indices = np.linspace(0, len(data["images"])-1, n_frames, dtype=int)
+    # 第一行：显示4张图像
+    for i, idx in enumerate(sample_indices):
+        ax_img = fig.add_subplot(4, 4, i + 1)
+        img = tf.io.decode_image(images[idx]).numpy()
+        ax_img.imshow(img)
+        ax_img.set_title(f"Image Step {idx}")
+        ax_img.axis('off')
 
-    fig, axes = plt.subplots(2, n_frames, figsize=(4*n_frames, 8))
+        # 第二行：手腕图像
+        ax_wrist = fig.add_subplot(4, 4, i + 5)
+        wrist = tf.io.decode_image(wrist_images[idx]).numpy()
+        ax_wrist.imshow(wrist)
+        ax_wrist.set_title(f"Wrist Step {idx}")
+        ax_wrist.axis('off')
 
-    if n_frames == 1:
-        axes = axes.reshape(2, 1)
-
-    for i, idx in enumerate(indices):
-        # 主相机图像
-        axes[0, i].imshow(data["images"][idx])
-        axes[0, i].set_title(f"Frame {idx}")
-        axes[0, i].axis("off")
-        if i == 0:
-            axes[0, i].set_ylabel("Main Camera", fontsize=12)
-
-        # 腕部相机图像
-        axes[1, i].imshow(data["wrist_images"][idx])
-        axes[1, i].axis("off")
-        if i == 0:
-            axes[1, i].set_ylabel("Wrist Camera", fontsize=12)
-
-    plt.suptitle(f"Sample {sample_idx} - {n_frames} frames", fontsize=14)
-    plt.tight_layout()
-    plt.savefig(f"sample_{sample_idx}_visualization.png", dpi=100)
-    print(f"Saved sample_{sample_idx}_visualization.png")
-    plt.close()
-
-
-def plot_actions(data, sample_idx=0):
-    """绘制动作曲线"""
-    actions = data["actions"]  # shape: (num_steps, 7)
-
-    fig, axes = plt.subplots(2, 4, figsize=(16, 8))
-    axes = axes.flatten()
-
-    action_names = ["x", "y", "z", "roll", "pitch", "yaw", "gripper"]
+    # 第三行和第四行：动作曲线
+    action_names = ['base_x', 'base_y', 'base_z', 'base_rz', 'base_ry', 'base_rx', 'gripper']
 
     for i in range(7):
-        axes[i].plot(actions[:, i])
-        axes[i].set_title(f"Action {i}: {action_names[i]}")
-        axes[i].set_xlabel("Step")
-        axes[i].set_ylabel("Value")
-        axes[i].grid(True)
+        ax = fig.add_subplot(4, 4, i + 9)
+        ax.plot(sample_indices, actions[sample_indices, i], 'o-', markersize=8)
+        ax.set_title(f"{action_names[i]}")
+        ax.set_xlabel("Step")
+        ax.set_ylabel("Value")
+        ax.set_xticks(sample_indices)
+        ax.set_xticklabels([str(idx) for idx in sample_indices])
+        ax.grid(True)
 
-    # 绘制 gripper 单独放大
-    axes[7].plot(actions[:, 6])
-    axes[7].set_title("Gripper (放大)")
-    axes[7].set_xlabel("Step")
-    axes[7].set_ylabel("Value")
-    axes[7].grid(True)
+    # 最后一个位置留空或显示额外信息
+    ax_info = fig.add_subplot(4, 4, 16)
+    ax_info.text(0.5, 0.5, f"Task: {lang_instr[:50]}...", ha='center', va='center', fontsize=10, wrap=True)
+    ax_info.axis('off')
 
-    plt.suptitle(f"Sample {sample_idx} - Action Trajectory", fontsize=14)
+    plt.suptitle(f"Sample {sample_idx}", fontsize=14)
     plt.tight_layout()
-    plt.savefig(f"sample_{sample_idx}_actions.png", dpi=100)
-    print(f"Saved sample_{sample_idx}_actions.png")
+    plt.savefig(f"sample_{sample_idx}_combined.png", dpi=100)
+    print(f"Saved sample_{sample_idx}_combined.png")
     plt.close()
+
+    return {
+        "actions": actions,
+        "states": states,
+        "language_instruction": lang_instr,
+    }
 
 
 def main():
@@ -184,24 +158,10 @@ def main():
 
     for i, sample in enumerate(dataset.take(args.num_samples)):
         try:
-            print(f"\n--- Processing sample {i} ---")
             data = visualize_sample(sample, i)
-
-            # 打印动作统计
-            print(f"\nActions shape: {data['actions'].shape}")
-            print(f"Action mean: {data['actions'].mean(axis=0)}")
-            print(f"Action std: {data['actions'].std(axis=0)}")
-            print(f"Action min: {data['actions'].min(axis=0)}")
-            print(f"Action max: {data['actions'].max(axis=0)}")
-
-            # 绘制图像
-            plot_sample(data, i, args.num_frames)
-
-            # 绘制动作曲线
-            plot_actions(data, i)
-
-            print(f"Sample {i} done!")
-
+            if data is not None:
+                print(f"\nActions shape: {data['actions'].shape}")
+                print(f"States shape: {data['states'].shape}")
         except Exception as e:
             print(f"Error processing sample {i}: {e}")
             import traceback
