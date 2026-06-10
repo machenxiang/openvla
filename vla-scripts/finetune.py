@@ -335,6 +335,7 @@ def finetune(cfg: FinetuneConfig) -> None:
                     tb_writer.add_scalar("train/action_accuracy", smoothened_action_accuracy, gradient_step_idx)
                     tb_writer.add_scalar("train/l1_loss", smoothened_l1_loss, gradient_step_idx)
                     tb_writer.add_scalar("train/learning_rate", scheduler.get_last_lr()[0], gradient_step_idx)
+                    print(f"[Step {gradient_step_idx}] Loss: {smoothened_loss:.4f} | Acc: {smoothened_action_accuracy:.4f} | L1: {smoothened_l1_loss:.4f} | LR: {scheduler.get_last_lr()[0]:.2e}")
 
                 optimizer.zero_grad()
                 progress.update()
@@ -349,11 +350,13 @@ def finetune(cfg: FinetuneConfig) -> None:
                         save_model = vla.module if hasattr(vla, "module") else vla.base_model
                         # For LoRA, save only the adapter weights
                         if cfg.use_lora:
-                            vla.save_pretrained(adapter_dir)
+                            # 保存到带step后缀的子目录
+                            adapter_dir_with_step = adapter_dir / f"step_{gradient_step_idx}"
+                            os.makedirs(adapter_dir_with_step, exist_ok=True)
+                            vla.save_pretrained(adapter_dir_with_step)
+                            print(f"Saved LoRA adapter for Step {gradient_step_idx} at: {adapter_dir_with_step}")
                         else:
                             save_model.save_pretrained(run_dir)
-
-                        print(f"Saved LoRA adapter for Step {gradient_step_idx} at: {adapter_dir}")
 
                     # Wait for processor and adapter weights to be saved by main process
                     # Only call barrier if we're actually in distributed mode
@@ -370,7 +373,16 @@ def finetune(cfg: FinetuneConfig) -> None:
                         base_vla = AutoModelForVision2Seq.from_pretrained(
                             cfg.vla_path, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True, trust_remote_code=True
                         )
-                        merged_vla = PeftModel.from_pretrained(base_vla, str(adapter_dir))
+                        # 找到最后一个保存的checkpoint目录
+                        import glob
+                        step_dirs = sorted(glob.glob(str(adapter_dir / "step_*")))
+                        if step_dirs:
+                            final_adapter_dir = step_dirs[-1]
+                            print(f"Using adapter from: {final_adapter_dir}")
+                            merged_vla = PeftModel.from_pretrained(base_vla, final_adapter_dir)
+                        else:
+                            # 如果没有step子目录（save_latest_checkpoint_only=True的情况），直接用adapter_dir
+                            merged_vla = PeftModel.from_pretrained(base_vla, str(adapter_dir))
                         merged_vla = merged_vla.merge_and_unload()
                         merged_vla.save_pretrained(run_dir)
                         print(f"Saved merged model at: {run_dir}")

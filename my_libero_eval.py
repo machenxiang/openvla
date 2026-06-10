@@ -30,7 +30,7 @@ if __name__ == "__main__":
             sys.executable,
             "experiments/robot/libero/run_libero_eval.py",
             "--model_family=openvla",
-            "--pretrained_checkpoint=/home/vcar/openvla/runs/openvla-7b+libero_spatial_no_noops+b4+lr-5e-05+lora-r32+dropout-0.0--image_aug",
+            "--pretrained_checkpoint=/home/vcar/openvla/runs/openvla-7b+libero_spatial_no_noops+b32+lr-0.0005+lora-r32+dropout-0.0--image_aug+20260604-162222",
             "--task_suite_name=libero_spatial",
             "--center_crop=True",
             "--num_trials_per_task=10",  # 减少试验次数加快调试

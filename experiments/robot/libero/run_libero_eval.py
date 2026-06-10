@@ -154,6 +154,10 @@ def eval_libero(cfg: GenerateConfig) -> None:
 
         # Initialize LIBERO environment and task description
         env, task_description = get_libero_env(task, cfg.model_family, resolution=256)
+        # if task_description != "pick up the black bowl on the ramekin and place it on the plate":
+        #     continue
+        # # else:
+        # #     task_description = "pick up the black bowl from the ramekin and place it on the plate"
 
         # Start episodes
         task_episodes, task_successes = 0, 0
@@ -183,6 +187,13 @@ def eval_libero(cfg: GenerateConfig) -> None:
 
             print(f"Starting episode {task_episodes+1}...")
             log_file.write(f"Starting episode {task_episodes+1}...\n")
+
+            # 创建调试文件（每个视频一个txt）
+            debug_filename = f"rollouts/{run_id}/task{task_id}_episode_{episode_idx+1}_debug.txt"
+            os.makedirs(os.path.dirname(debug_filename), exist_ok=True)
+            debug_file = open(debug_filename, "w")
+            debug_file.write(f"Episode {episode_idx+1} Debug Log\n")
+            debug_file.write(f"Task: {task_description}\n")
             while t < max_steps + cfg.num_steps_wait:
                 try:
                     # IMPORTANT: Do nothing for the first few timesteps because the simulator drops objects
@@ -216,8 +227,35 @@ def eval_libero(cfg: GenerateConfig) -> None:
                         processor=processor,
                     )
 
+                    # 伪代码示例：在 eval 循环中打印最后阶段的控制命令
+                    print(f"原始action: {action}")  # 添加这行
+
                     # Normalize gripper action [0,1] -> [-1,+1] because the environment expects the latter
+                    origin_grip_action = float(action[..., -1].copy())
                     action = normalize_gripper_action(action, binarize=True)
+                    if t >= 0:  # 假设动作进行到中后期，机械臂已经靠近物体
+                        # 获取机械臂夹爪位置
+                        gripper_pos = obs["robot0_eef_pos"]
+                        # 获取两个黑碗的位置
+                        bowl1_pos = env.sim.data.get_body_xpos("akita_black_bowl_1_main")
+                        bowl2_pos = env.sim.data.get_body_xpos("akita_black_bowl_2_main")
+                        # 计算两个碗到机械臂的距离
+                        dist1 = (
+                            (gripper_pos[0] - bowl1_pos[0]) ** 2
+                            + (gripper_pos[1] - bowl1_pos[1]) ** 2
+                            + (gripper_pos[2] - bowl1_pos[2]) ** 2
+                        ) ** 0.5
+                        dist2 = (
+                            (gripper_pos[0] - bowl2_pos[0]) ** 2
+                            + (gripper_pos[1] - bowl2_pos[1]) ** 2
+                            + (gripper_pos[2] - bowl2_pos[2]) ** 2
+                        ) ** 0.5
+                        dist1_cm = dist1 * 100
+                        dist2_cm = dist2 * 100
+                        debug_info = f"Step {t}: gripper=({gripper_pos[0]:.4f},{gripper_pos[1]:.4f},{gripper_pos[2]:.4f}) | bowl1=({bowl1_pos[0]:.4f},{bowl1_pos[1]:.4f},{bowl1_pos[2]:.4f}) dist1={dist1_cm:.2f}cm | bowl2=({bowl2_pos[0]:.4f},{bowl2_pos[1]:.4f},{bowl2_pos[2]:.4f}) dist2={dist2_cm:.2f}cm | gripper={action[-1]:.2f}| origin_gripper={origin_grip_action:.2f}"
+                        print(debug_info)
+                        debug_file.write(debug_info + "\n")
+                        debug_file.flush()
 
                     # [OpenVLA] The dataloader flips the sign of the gripper action to align with other datasets
                     # (0 = close, 1 = open), so flip it back (-1 = open, +1 = close) before executing the action
@@ -235,10 +273,16 @@ def eval_libero(cfg: GenerateConfig) -> None:
                 except Exception as e:
                     print(f"Caught exception: {e}")
                     log_file.write(f"Caught exception: {e}\n")
+                    debug_file.write(f"Exception: {e}\n")
+                    debug_file.close()
                     break
 
             task_episodes += 1
             total_episodes += 1
+
+            # 关闭调试文件
+            debug_file.write(f"\nEpisode {episode_idx+1} finished. Success: {done}\n")
+            debug_file.close()
 
             # Save a replay video of the episode
             save_rollout_video(

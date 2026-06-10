@@ -146,6 +146,8 @@ def main():
                                  "libero_goal_no_noops", "libero_10_no_noops"])
     parser.add_argument("--num_samples", type=int, default=3, help="Number of samples to visualize")
     parser.add_argument("--num_frames", type=int, default=5, help="Number of frames to show per sample")
+    parser.add_argument("--keyword", type=str, default=None,
+                        help="Filter samples by keyword in instruction (e.g., 'ramekin')")
 
     args = parser.parse_args()
 
@@ -155,19 +157,33 @@ def main():
     print(f"Loaded dataset: {args.dataset}")
     print(f"Data root: {data_root}")
     print(f"Number of samples to visualize: {args.num_samples}")
+    if args.keyword:
+        print(f"Keyword filter: '{args.keyword}'")
 
-    for i, sample in enumerate(dataset.take(args.num_samples)):
+    visualized = 0
+    for i, sample in enumerate(dataset.take(1000)):  # 先扫描更多样本找匹配的
         try:
-            data = visualize_sample(sample, i)
+            # 检查是否包含关键词
+            instructions = tf.sparse.to_dense(sample["steps/language_instruction"])
+            if args.keyword:
+                lang_instr = instructions[0].numpy().decode('utf-8') if len(instructions) > 0 else ""
+                if args.keyword.lower() not in lang_instr.lower():
+                    continue  # 跳过不匹配的样本
+
+            data = visualize_sample(sample, visualized)
             if data is not None:
                 print(f"\nActions shape: {data['actions'].shape}")
                 print(f"States shape: {data['states'].shape}")
+            visualized += 1
+            if visualized >= args.num_samples:
+                break
         except Exception as e:
             print(f"Error processing sample {i}: {e}")
             import traceback
             traceback.print_exc()
 
-    print("\n=== Visualization complete! ===")
+    print(f"\n=== Visualization complete! ===")
+    print(f"Visualized {visualized} samples matching keyword '{args.keyword}'")
     print("Check current directory for saved PNG files.")
 
 
