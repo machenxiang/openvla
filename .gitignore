@@ -153,3 +153,5 @@ rollouts/
 wandb/
 runs/
 adapter-tmp/
+experiments/logs/
+merged_checkpoints/

@@ -154,10 +154,10 @@ def eval_libero(cfg: GenerateConfig) -> None:
 
         # Initialize LIBERO environment and task description
         env, task_description = get_libero_env(task, cfg.model_family, resolution=256)
-        # if task_description != "pick up the black bowl on the ramekin and place it on the plate":
-        #     continue
-        # # else:
-        # #     task_description = "pick up the black bowl from the ramekin and place it on the plate"
+        if task_description != "pick up the black bowl on the ramekin and place it on the plate":
+            continue
+        # else:
+        #     task_description = "grab up the black bowl on the ramekin and place it on the plate"
 
         # Start episodes
         task_episodes, task_successes = 0, 0
@@ -227,13 +227,10 @@ def eval_libero(cfg: GenerateConfig) -> None:
                         processor=processor,
                     )
 
-                    # 伪代码示例：在 eval 循环中打印最后阶段的控制命令
-                    print(f"原始action: {action}")  # 添加这行
-
                     # Normalize gripper action [0,1] -> [-1,+1] because the environment expects the latter
                     origin_grip_action = float(action[..., -1].copy())
                     action = normalize_gripper_action(action, binarize=True)
-                    if t >= 0:  # 假设动作进行到中后期，机械臂已经靠近物体
+                    if t >= 0:
                         # 获取机械臂夹爪位置
                         gripper_pos = obs["robot0_eef_pos"]
                         # 获取两个黑碗的位置
