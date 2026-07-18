@@ -40,6 +40,35 @@ def get_vla(cfg):
     AutoProcessor.register(OpenVLAConfig, PrismaticProcessor)
     AutoModelForVision2Seq.register(OpenVLAConfig, OpenVLAForActionPrediction)
 
+    # 上面4个这是把 OpenVLA 这个自定义模型注册到 Hugging Face 的 Auto 体系里。注册之后，
+    # 就可以通过 AutoModelForVision2Seq.from_pretrained() 自动加载 OpenVLA 模型，而不需要手动 import。
+    # 注册完之后在pretrain中进行 读取配置然后实例化
+    # 下面调用使用了位置参数和关键字参数混用
+    # def func(a, b, c):
+    # pass
+    # func(1, 2, 3)        # a=1, b=2, c=3  ← 按位置顺序传
+    # 关键字参数 — 按"形参名字"匹配
+    # func(a=1, b=2, c=3)  # a=1, b=2, c=3  ← 按名字匹配，顺序无关
+    # func(1, 2, c=3)      # 合法: 位置 a=1, b=2，然后关键字 c=3
+    # **kwargs 形参
+    # def func(a, b, **kwargs):
+    #     pass
+    # **kwargs 可以接收任意多个关键字参数：
+    # func(1, 2, x=10, y=20, z=30)      # kwargs = {"x": 10, "y": 20, "z": 30}
+    # 单*问题
+    # *args vs **kwargs 对比
+    # *args	**kwargs
+    # 收集类型	位置参数 → 元组	关键字参数 → 字典
+    # 打包符号	*	**
+    #
+    # def func(a, *args, **kwargs):
+    #     pass
+    #
+    # func(1, 2, 3, x=4, y=5)
+    # # a = 1
+    # # args = (2, 3)
+    # # kwargs = {"x": 4, "y": 5}
+
     vla = AutoModelForVision2Seq.from_pretrained(
         cfg.pretrained_checkpoint,
         attn_implementation="flash_attention_2",

@@ -71,6 +71,15 @@ def chunk_act_obs(traj: Dict, window_size: int, future_action_window_size: int =
     return traj
 
 
+# 原始: 100步轨迹
+# subsample_length=20
+# 结果: 随机保留20步
+
+# 或者:
+# 原始: 50步轨迹
+# subsample_length=100
+# 结果: 不变 (50 < 100，不触发下采样)
+
 def subsample(traj: Dict, subsample_length: int) -> Dict:
     """Subsamples trajectories to the given length."""
     traj_len = tf.shape(traj["action"])[0]
@@ -79,6 +88,28 @@ def subsample(traj: Dict, subsample_length: int) -> Dict:
         traj = tf.nest.map_structure(lambda x: tf.gather(x, indices), traj)
 
     return traj
+
+
+# 这是给每个观测和任务添加一个padding mask 字典，标记哪些是真实数据、哪些是 padding（空数据）。
+# 背景
+# 有些样本的某些字段是空的（比如没有 wrist 相机图像），用空字符串 "" 做 padding：
+
+# 举例
+# traj["observation"] = {
+#     "image_front": ["img", "img", "img"],      # 字符串，有内容
+#     "image_wrist": ["", "", ""],                # 字符串，空（padding）
+#     "proprio": [[0.1, 0.2], [0.3, 0.4]],       # 数值，非字符串
+# }
+# 生成的结果
+# traj["observation"]["pad_mask_dict"] = {
+#     "image_front": [True, True, True],          # 有内容 → True
+#     "image_wrist": [False, False, False],       # 空字符串 → False
+#     "proprio": [True, True, True],              # 数值类型 → 全部 True
+# }
+# 图示
+# image_front: [img1] [img2] [img3]  → pad_mask = [True]  [True]  [True]   ← 真实数据
+# image_wrist:   [""]    [""]    [""]  → pad_mask = [False] [False] [False]  ← padding
+# proprio:     [0.1,0.2] [0.3,0.4] [...]  → pad_mask = [True]  [True]  [True]  ← 真实数据
 
 
 def add_pad_mask_dict(traj: Dict) -> Dict:

@@ -43,6 +43,7 @@ def make_oxe_dataset_kwargs(
     dataset_kwargs["action_proprio_normalization_type"] = action_proprio_normalization_type
 
     # Adjust Loaded Camera Views
+    # set(A) - set(B)  # 集合差：A中有但B中没有的元素
     if len(missing_keys := (set(load_camera_views) - set(dataset_kwargs["image_obs_keys"]))) > 0:
         raise ValueError(f"Cannot load `{dataset_name}`; missing camera views `{missing_keys}`")
 
@@ -70,6 +71,19 @@ def make_oxe_dataset_kwargs(
     dataset_kwargs["standardize_fn"] = OXE_STANDARDIZATION_TRANSFORMS[dataset_name]
 
     # Add any aux arguments
+    # 之前
+    # 这是一个展平嵌套配置的技巧。
+    # dataset_kwargs = {
+    #     "name": "bridge",
+    #     "aux_kwargs": {"custom_param1": 10, "custom_param2": 20}
+    # }
+
+    # # 之后
+    # dataset_kwargs = {
+    #     "name": "bridge",
+    #     "custom_param1": 10,    # 展开到顶层
+    #     "custom_param2": 20
+    # }
     if "aux_kwargs" in dataset_kwargs:
         dataset_kwargs.update(dataset_kwargs.pop("aux_kwargs"))
 

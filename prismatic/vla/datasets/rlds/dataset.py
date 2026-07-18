@@ -303,6 +303,8 @@ def apply_trajectory_transforms(
             raise ValueError("skip_unlabeled=True but dataset does not have language labels.")
 
         dataset = dataset.filter(lambda x: tf.math.reduce_any(x["task"]["language_instruction"] != ""))
+    # action	机器人执行的动作	控制信号，如 [position(3), rotation(3), gripper(1)]
+    # proprio	机器人自身的状态	反馈信号，如 [joint_angles, gripper_pos, ...]
 
     if max_action is not None:
         dataset = dataset.filter(lambda x: tf.math.reduce_all(tf.math.abs(x["action"]) <= max_action))
@@ -314,6 +316,22 @@ def apply_trajectory_transforms(
     dataset = dataset.traj_map(traj_transforms.add_pad_mask_dict, num_parallel_calls)
 
     # updates the "task" dict
+    # Goal Relabeling（目标重标记） 是一种数据增强技术，把未来的目标状态作为语言指令来训练，帮助模型学习 goal-conditioned 策略。
+    # 核心思想
+    # 正常训练: "pick up the red bowl" → action
+    # goal relabeling: "place the bowl on the plate" → current action (用未来的目标作为指令)
+    # 这样模型不仅能执行当前任务，还能根据目标指令调整行为
+    # 调用栈
+    # goal_relabeling_strategy = "uniform"
+    #                 ↓
+    # getattr(goal_relabeling, "uniform")
+    #                     ↓
+    # 获取函数 uniform(traj)
+    #                     ↓
+    # partial(uniform, *{})
+    #                     ↓
+    # traj_map(...)
+
     if goal_relabeling_strategy is not None:
         dataset = dataset.traj_map(
             partial(getattr(goal_relabeling, goal_relabeling_strategy), **goal_relabeling_kwargs),
@@ -321,6 +339,11 @@ def apply_trajectory_transforms(
         )
 
     # must run task augmentation before chunking, in case it changes goal timesteps
+    #     训练时随机选择：
+
+    # 保留语言指令，丢弃目标图像
+    # 保留目标图像，丢弃语言指令
+    # 这样可以让模型在缺少部分任务条件时也能正常工作。
     if train and task_augment_strategy is not None:
         # perform task augmentation (e.g., dropping keys)
         dataset = dataset.traj_map(

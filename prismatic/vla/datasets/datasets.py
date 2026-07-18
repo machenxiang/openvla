@@ -89,6 +89,8 @@ class RLDSDataset(IterableDataset):
             mixture_spec = [(self.data_mix, 1.0)]
 
         # fmt: off
+        # per_dataset_kwargs	List[Dict]	每个数据集的配置字典列表
+        # weights	List[float]	每个数据集的采样权重列表
         per_dataset_kwargs, weights = get_oxe_dataset_kwargs_and_weights(
             self.data_root_dir,
             mixture_spec,
