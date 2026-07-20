@@ -97,7 +97,15 @@ class PaddedCollatorForActionPrediction:
     pad_token_id: int
     padding_side: str = "right"
     pixel_values_dtype: torch.dtype = torch.float32
-
+    # instances 是 batch_size 个单独的 step，不是一条轨迹。
+    # 每个 instance 是 RLDSBatchTransform 输出的单样本：
+    # {
+    #     "input_ids": tensor([...]),      # 文本 token IDs
+    #     "labels": tensor([...]),         # 标签 token IDs
+    #     "pixel_values": tensor([3, 224, 224]),  # 图像
+    #     "dataset_name": "libero_spatial"  # 可选
+    # }
+    # 这里的instances 是batch size个步
     def __call__(self, instances: Sequence[Dict[str, torch.Tensor]]) -> Dict[str, torch.Tensor]:
         input_ids, labels = tuple([instance[key] for instance in instances] for key in ("input_ids", "labels"))
         pixel_values = [instance["pixel_values"] for instance in instances]
@@ -108,6 +116,17 @@ class PaddedCollatorForActionPrediction:
 
         # For now, we only support Tokenizers with `padding_side = "right"` during training
         #   => Handle padding via RNN Utils => `pad_sequence`
+        # pad_sequence 会把不同长度的 tensor 拼成 batch
+
+        # instance_0: [101, 2003, 102]           # 长度 3
+        # instance_1: [101, 2003, 1996, 102]  # 长度 4
+
+        # pad 后:
+        # input_ids = [
+        #     [101, 2003, 102, PAD],      # instance_0
+        #     [101, 2003, 1996, 102]      # instance_1 (不用 pad)
+        # ]
+        #  PAD = pad_token_id = 32000
         assert self.padding_side == "right", f"Invalid Tokenizer `{self.padding_side = }`"
         input_ids = pad_sequence(input_ids, batch_first=True, padding_value=self.pad_token_id)
         labels = pad_sequence(labels, batch_first=True, padding_value=IGNORE_INDEX)
@@ -117,6 +136,17 @@ class PaddedCollatorForActionPrediction:
 
         # Get `attention_mask` by checking for `pad_token_id`
         attention_mask = input_ids.ne(self.pad_token_id)
+        #  ne = not equal
+
+        # input_ids = [
+        #     [101, 2003, 102, 32000],  # 32000 是 pad
+        #     [101, 2003, 1996, 102]
+        # ]
+
+        # attention_mask = [
+        #     [1, 1, 1, 0],   # 1=有效, 0=pad
+        #     [1, 1, 1, 1]
+        # ]
 
         # [Contract] For VLA Training =>> No "Unimodal" Data!
         assert all([pv is not None for pv in pixel_values]), "Invalid VLA Example with `pixel_values = None`!"

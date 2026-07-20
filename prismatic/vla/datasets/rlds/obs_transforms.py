@@ -21,8 +21,28 @@ def augment(obs: Dict, seed: tf.Tensor, augment_kwargs: Union[Dict, Dict[str, Di
     # "augment_order" is required in augment_kwargs, so if it's there, we can assume that the user has passed
     # in a single augmentation dict (otherwise, we assume that the user has passed in a mapping from image
     # name to augmentation dict)
+
+    # 就是把aug参数 复制成和图片数量一样的数量，也就是front和wrist用一套图像增强参数
+    #     augment_kwargs = {
+    #     "front": {
+    #         "random_resized_crop": {"scale": [0.9, 0.9], "ratio": [1.0, 1.0]},
+    #         "random_brightness": [0.2],
+    #         "random_contrast": [0.8, 1.2],
+    #         "augment_order": ["random_resized_crop", "random_brightness", "random_contrast"],
+    #     },
+    #     "wrist": {
+    #         "random_resized_crop": {"scale": [0.9, 0.9], "ratio": [1.0, 1.0]},
+    #         "random_brightness": [0.2],
+    #         "random_contrast": [0.8, 1.2],
+    #         "augment_order": ["random_resized_crop", "random_brightness", "random_contrast"],
+    #     },
+    # }
     if "augment_order" in augment_kwargs:
         augment_kwargs = {name: augment_kwargs for name in image_names}
+
+    # 多种增强方式如何处理	dl.transforms.augment_image 内部按 augment_order 依次执行
+    # augment_order 作用	指定各种增强的执行顺序
+    # 每次调用 augment_image	执行全部增强操作（不是只执行一种）
 
     for i, name in enumerate(image_names):
         if name not in augment_kwargs:

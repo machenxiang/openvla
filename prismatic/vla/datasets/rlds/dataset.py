@@ -315,22 +315,43 @@ def apply_trajectory_transforms(
     # marks which entires of the observation and task dicts are padding
     dataset = dataset.traj_map(traj_transforms.add_pad_mask_dict, num_parallel_calls)
 
-    # updates the "task" dict
-    # Goal Relabeling（目标重标记） 是一种数据增强技术，把未来的目标状态作为语言指令来训练，帮助模型学习 goal-conditioned 策略。
-    # 核心思想
-    # 正常训练: "pick up the red bowl" → action
-    # goal relabeling: "place the bowl on the plate" → current action (用未来的目标作为指令)
-    # 这样模型不仅能执行当前任务，还能根据目标指令调整行为
-    # 调用栈
-    # goal_relabeling_strategy = "uniform"
-    #                 ↓
-    # getattr(goal_relabeling, "uniform")
-    #                     ↓
-    # 获取函数 uniform(traj)
-    #                     ↓
-    # partial(uniform, *{})
-    #                     ↓
-    # traj_map(...)
+    # 原始 task:
+    # {
+    #     "language_instruction": "pick up the ball"
+    # }
+
+    # 经过 uniform goal relabeling → 变成:
+
+    # goal task:
+    # {
+    #     "language_instruction": "pick up the ball",   ← 指令
+    #     "image_front": tensor(...),                    ← 未来某帧的图片（goal）
+    #     "proprio": [...],                              ← 未来某帧的状态（goal）
+    # }
+    # 组成"任务指令对"
+
+    # task = 语言指令 + goal图像
+    #      = "pick up the ball" + 未来帧的机器人末端执行器位置图片
+    # 训练时
+
+    # 输入:
+    #   - observation: 当前帧的图像
+    #   - task: 语言指令 + goal图像
+
+    # 模型应该学会:
+    #   - 给定当前观测 + 任务描述(指令+goal)
+    #   - 预测到达 goal 状态需要的动作
+    # 但 OpenVLA 的情况
+    # OpenVLA 忽略了 goal 图像，只用语言指令：
+
+    # OpenVLA 实际用的:
+    #   - observation: 当前帧图像
+    #   - task["language_instruction"]: "pick up the ball"
+    #   - task 中的 goal 图像: 被忽略
+
+    #     task = 指令 + goal 图像（goal relabeling 产生的）
+    # 理想情况下，模型应该用两者的组合
+    # 但 OpenVLA 只用了指令，goal 图像是"白加了"
 
     if goal_relabeling_strategy is not None:
         dataset = dataset.traj_map(
@@ -557,6 +578,7 @@ def make_interleaved_dataset(
     # Construct Datasets
     overwatch.info("Constructing datasets...")
     datasets = []
+    # 这就是libero_spatial_no_noops一整个数据集跑一次
     for dataset_kwargs, threads, reads in zip(
         dataset_kwargs_list,
         threads_per_dataset,
@@ -592,6 +614,12 @@ def make_interleaved_dataset(
 
     # Shuffle the Dataset
     #   =>> IMPORTANT :: Shuffle AFTER .cache(), or else memory will still leak!
+
+    # 步骤	是否顺序
+    # 填充 buffer	✅ 按顺序
+    # 补充 buffer	✅ 按顺序
+    # 从 buffer 输出	❌ 随机
+    # 输出是随机的，补充是顺序的——这是 shuffle 的标准实现。
     dataset = dataset.shuffle(shuffle_buffer_size)
 
     # Apply Frame Transforms
@@ -599,6 +627,7 @@ def make_interleaved_dataset(
     dataset = apply_frame_transforms(dataset, **frame_transform_kwargs, train=train)
 
     # [Contract] When training VLA Policies, we let the Collator handle Batching!
+    # 不在这里做batch size
     if batch_size is not None:
         dataset = dataset.batch(batch_size)
 
